@@ -4,8 +4,9 @@ export interface User {
 }
 
 export interface AuthResponse {
-  user_id: User;
+  user_id: string;
   message: string;
+  token?: string;
 }
 
 export interface LoginCredentials {
