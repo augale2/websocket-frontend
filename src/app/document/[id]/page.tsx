@@ -5,6 +5,7 @@ import { Document } from '@/types/document';
 import { getDocument, updateDocument } from '@/lib/documents';
 import { isAuthenticated } from '@/lib/auth';
 import { useRouter } from 'next/navigation';
+import { useWebSocket, DocumentEvent } from '@/hooks/useWebSocket';
 
 export default function DocumentPage({ params }: { params: { id: string } }) {
   const router = useRouter();
@@ -14,6 +15,9 @@ export default function DocumentPage({ params }: { params: { id: string } }) {
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Connect to the global WebSocket endpoint.
+  const { messages } = useWebSocket("ws://localhost:8080/ws");
 
   useEffect(() => {
     if (!isAuthenticated()) {
@@ -41,12 +45,32 @@ export default function DocumentPage({ params }: { params: { id: string } }) {
     fetchDocument();
   }, [params.id, router]);
 
+  // Listen to global WebSocket events, filtering for this document
+  useEffect(() => {
+    if (!params.id || messages.length === 0) return;
+    
+    // Process only the latest event for simplicity
+    const event: DocumentEvent = messages[messages.length - 1];
+    
+    if (event.document_id === params.id) {
+      if (event.event_type === "updated") {
+        // Update the title and content if the document was updated elsewhere.
+        setTitle(event.title);
+        setContent(event.content);
+      } else if (event.event_type === "deleted") {
+        // Notify the user and redirect if the document was deleted.
+        alert("This document has been deleted by another user.");
+        router.push('/');
+      }
+    }
+  }, [messages, params.id, router]);
+
   const handleContentChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     try {
       const newContent = e.target.value;
       setContent(newContent);
       if (document) {
-        updateDocument(document.id, newContent);
+        updateDocument(document.id, newContent, title);
       }
     } catch (err) {
       setError('Failed to save changes');
@@ -137,7 +161,7 @@ export default function DocumentPage({ params }: { params: { id: string } }) {
             autoFocus
           />
         ) : (
-          <h1 
+          <h1
             className="text-2xl font-normal text-gray-900 cursor-pointer hover:text-blue-600"
             onClick={() => setIsEditingTitle(true)}
           >
@@ -160,4 +184,4 @@ export default function DocumentPage({ params }: { params: { id: string } }) {
       />
     </main>
   );
-} 
+}

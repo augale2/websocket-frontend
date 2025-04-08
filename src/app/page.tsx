@@ -6,6 +6,7 @@ import { getDocuments, createDocument, deleteDocument } from '@/lib/documents';
 import { getUser, logout, isAuthenticated } from '@/lib/auth';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { useWebSocket, DocumentEvent } from '@/hooks/useWebSocket';
 
 export default function HomePage() {
   const router = useRouter();
@@ -13,6 +14,9 @@ export default function HomePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [user, setUser] = useState<any>(null);
+
+  // Initialize the WebSocket connection to your global room.
+  const { messages } = useWebSocket("ws://localhost:8080/ws");
 
   useEffect(() => {
     if (!isAuthenticated()) {
@@ -35,6 +39,37 @@ export default function HomePage() {
     fetchDocuments();
   }, [router]);
 
+  // Process the latest WebSocket event when messages update.
+  useEffect(() => {
+    if (messages.length === 0) return;
+
+    // Process only the latest event received.
+    const event: DocumentEvent = messages[messages.length - 1];
+    console.log("Processing event:", event);
+
+    if (event.event_type === "created") {
+      // Append new document.
+      setDocuments((prevDocs) => [
+        ...prevDocs,
+        { id: event.document_id, name: event.title },
+      ]);
+    } else if (event.event_type === "updated") {
+      // Update existing document.
+      setDocuments((prevDocs) =>
+        prevDocs.map((doc) =>
+          doc.id === event.document_id
+            ? { ...doc, name: event.title }
+            : doc
+        )
+      );
+    } else if (event.event_type === "deleted") {
+      // Remove deleted document.
+      setDocuments((prevDocs) =>
+        prevDocs.filter((doc) => doc.id !== event.document_id)
+      );
+    }
+  }, [messages]);
+
   const handleCreateDocument = async () => {
     try {
       const newDoc = await createDocument('Untitled Document');
@@ -47,7 +82,7 @@ export default function HomePage() {
   const handleDeleteDocument = async (id: string) => {
     try {
       await deleteDocument(id);
-      setDocuments(documents.filter(doc => doc.id !== id));
+      setDocuments(documents.filter((doc) => doc.id !== id));
     } catch (err) {
       setError('Failed to delete document');
     }
