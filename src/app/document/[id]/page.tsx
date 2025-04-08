@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { Document } from '@/types/document';
 import { getDocument, updateDocument } from '@/lib/documents';
+import { isAuthenticated } from '@/lib/auth';
 import { useRouter } from 'next/navigation';
 
 export default function DocumentPage({ params }: { params: { id: string } }) {
@@ -15,6 +16,11 @@ export default function DocumentPage({ params }: { params: { id: string } }) {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!isAuthenticated()) {
+      router.push('/login');
+      return;
+    }
+
     const fetchDocument = async () => {
       try {
         const doc = await getDocument(params.id);
